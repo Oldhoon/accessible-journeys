@@ -25,11 +25,20 @@ const AccessibilityMap: React.FC<AccessibilityMapProps> = ({
   const [selectedMarker, setSelectedMarker] = useState<AccessibilityMarker | null>(null);
   const [markers, setMarkers] = useState<AccessibilityMarker[]>([]);
   
-  // Load the Google Maps script
+  // Add debug logs
+  useEffect(() => {
+    console.log('Checking Google Maps availability:', window.google?.maps);
+  }, []);
+
   const { isLoaded, loadError } = useLoadScript({
-    googleMapsApiKey: GOOGLE_MAPS_CONFIG.apiKey,
+    googleMapsApiKey: "YOUR_API_KEY",
     libraries: ['places']
   });
+
+  // Add debug logs
+  useEffect(() => {
+    console.log('Map load status:', { isLoaded, loadError });
+  }, [isLoaded, loadError]);
 
   // Get user's location
   useEffect(() => {

@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { ChevronLeft, MapPin, Clock, Star } from 'lucide-react';
@@ -7,73 +6,67 @@ import AppNavigation from '@/components/navigation/AppNavigation';
 import { buttonFeedback } from '@/utils/hapticFeedback';
 import { cn } from '@/lib/utils';
 
-// Mock search results
-const mockResults = [
-  {
-    id: '1',
-    name: 'Central Park',
-    address: '59th to 110th Street, New York, NY',
-    rating: 4.5,
-    distance: '0.5 miles',
-    features: ['wheelchair', 'parking', 'toilet'],
-    type: 'park'
-  },
-  {
-    id: '2',
-    name: 'Accessible Café',
-    address: '123 Main Street, New York, NY',
-    rating: 4.8,
-    distance: '0.7 miles',
-    features: ['wheelchair', 'ramp', 'toilet', 'lowCounter'],
-    type: 'cafe'
-  },
-  {
-    id: '3',
-    name: 'Community Library',
-    address: '456 Book Avenue, New York, NY',
-    rating: 4.2,
-    distance: '1.2 miles',
-    features: ['wheelchair', 'elevator', 'braille', 'audio'],
-    type: 'library'
-  },
-  {
-    id: '4',
-    name: 'Public Transit Hub',
-    address: '789 Transit Road, New York, NY',
-    rating: 3.9,
-    distance: '0.8 miles',
-    features: ['wheelchair', 'elevator', 'audio'],
-    type: 'transit'
-  },
-  {
-    id: '5',
-    name: 'Shopping Center',
-    address: '101 Retail Lane, New York, NY',
-    rating: 4.0,
-    distance: '1.5 miles',
-    features: ['wheelchair', 'elevator', 'parking', 'toilet'],
-    type: 'shopping'
-  }
-];
+
+// Define a type for the place results
+interface PlaceResult {
+  id: string;
+  name: string;
+  address: string;
+  rating: number | 'N/A';
+  distance: string; // Placeholder for distance
+  features: string[];
+  type: string;
+}
 
 const SearchPage = () => {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
-  const [results, setResults] = useState<any[]>([]);
+  const [results, setResults] = useState<PlaceResult[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   
   const query = searchParams.get('q') || '';
-  
+
   useEffect(() => {
-    // Simulate loading search results
-    setLoading(true);
-    
-    setTimeout(() => {
-      setResults(mockResults);
-      setLoading(false);
-    }, 1000);
+    const fetchResults = async () => {
+      if (!query) return;
+
+      setLoading(true);
+      setError(null); // Reset error state
+      try {
+        const response: AxiosResponse = await axios.get(`https://maps.googleapis.com/maps/api/place/textsearch/json`, {
+          params: {
+            query: query,
+            key: import.meta.env.VITE_GOOGLE_MAPS_API_KEY, // Use environment variable
+          }
+        });
+
+        // Check if results are available
+        if (response.data.results) {
+          const formattedResults = response.data.results.map((place: any) => ({
+            id: place.place_id,
+            name: place.name,
+            address: place.formatted_address,
+            rating: place.rating || 'N/A',
+            distance: 'Unknown', // Placeholder for distance
+            features: place.types, // You can map types to your features
+            type: place.types[0] // Get the primary type
+          }));
+          setResults(formattedResults);
+        } else {
+          setResults([]);
+        }
+      } catch (error) {
+        console.error('Error fetching results:', error);
+        setError('Failed to fetch results. Please try again later.');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchResults();
   }, [query]);
-  
+
   const handleSearch = (newQuery: string) => {
     navigate(`/search?q=${encodeURIComponent(newQuery)}`);
   };
@@ -123,6 +116,10 @@ const SearchPage = () => {
               <div className="h-3 bg-slate-200 rounded w-32"></div>
             </div>
             <p className="text-muted-foreground mt-3">Finding accessible places...</p>
+          </div>
+        ) : error ? (
+          <div className="py-8 text-center text-red-500">
+            <p>{error}</p>
           </div>
         ) : (
           <>
