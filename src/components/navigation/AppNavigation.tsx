@@ -1,5 +1,4 @@
-
-import React from 'react';
+import React, { useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { Home, Search, Plus, User, Settings } from 'lucide-react';
 import { buttonFeedback, navigationFeedback } from '@/utils/hapticFeedback';
@@ -8,6 +7,9 @@ import { cn } from '@/lib/utils';
 const AppNavigation: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
+  
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   
   const navItems = [
     { icon: Home, label: 'Home', path: '/' },
@@ -18,9 +20,17 @@ const AppNavigation: React.FC = () => {
   ];
   
   const handleNavigation = (path: string) => {
-    buttonFeedback();
-    navigationFeedback();
-    navigate(path);
+    try {
+      setIsLoading(true);
+      setError(null);
+      buttonFeedback();
+      navigationFeedback();
+      navigate(path);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'An error occurred');
+    } finally {
+      setIsLoading(false);
+    }
   };
   
   return (
@@ -53,5 +63,25 @@ const AppNavigation: React.FC = () => {
     </nav>
   );
 };
+
+// Create a new ErrorBoundary component
+class ErrorBoundary extends React.Component {
+  state = { hasError: false };
+
+  static getDerivedStateFromError() {
+    return { hasError: true };
+  }
+
+  componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
+    console.error('Error:', error, errorInfo);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return <div>Something went wrong. Please try again.</div>;
+    }
+    return this.props.children;
+  }
+}
 
 export default AppNavigation;

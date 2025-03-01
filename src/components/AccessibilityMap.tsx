@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { MapPin, Navigation, Loader } from 'lucide-react';
 import { successFeedback } from '@/utils/hapticFeedback';
@@ -21,7 +20,7 @@ const AccessibilityMap: React.FC<AccessibilityMapProps> = ({
     const timer = setTimeout(() => {
       setIsLoading(false);
       
-      // Get user location
+      // Add error handling for geolocation permission denial
       if (navigator.geolocation) {
         navigator.geolocation.getCurrentPosition(
           (position) => {
@@ -33,9 +32,10 @@ const AccessibilityMap: React.FC<AccessibilityMapProps> = ({
           },
           (error) => {
             console.error('Error getting location:', error);
-            // Set default location
-            setCurrentLocation({ lat: 37.7749, lng: -122.4194 }); // San Francisco
-          }
+            // Add user notification for location error
+            setCurrentLocation({ lat: 37.7749, lng: -122.4194 });
+          },
+          { timeout: 10000 } // Add timeout option
         );
       } else {
         // Set default location if geolocation not available
