@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { AlertTriangle, X, PhoneCall, MessageSquare, User } from 'lucide-react';
 import { errorFeedback, buttonFeedback } from '@/utils/hapticFeedback';
@@ -22,20 +21,25 @@ const SOSButton: React.FC<SOSButtonProps> = ({ className }) => {
     errorFeedback();
     setIsConfirming(true);
     
-    // Start countdown
+    // Fix potential memory leak
+    let intervalId: number;
     let count = 5;
-    const timer = setInterval(() => {
+    
+    intervalId = window.setInterval(() => {
       count -= 1;
       setCountdown(count);
       
       if (count <= 0) {
-        clearInterval(timer);
+        clearInterval(intervalId);
         sendSOS();
       }
     }, 1000);
     
-    // Store the timer to clear it if canceled
-    return () => clearInterval(timer);
+    // Return cleanup function
+    return () => {
+      clearInterval(intervalId);
+      setIsConfirming(false);
+    };
   };
   
   const cancelSOS = () => {
