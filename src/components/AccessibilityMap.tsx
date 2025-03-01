@@ -21,7 +21,7 @@ const AccessibilityMap: React.FC<AccessibilityMapProps> = ({
   className,
   onLocationSelect
 }) => {
-  const [currentLocation, setCurrentLocation] = useState<google.maps.LatLngLiteral>(GOOGLE_MAPS_CONFIG.defaultCenter);
+  const [currentLocation, setCurrentLocation] = useState<google.maps.LatLngLiteral | null>(null);
   const [selectedMarker, setSelectedMarker] = useState<AccessibilityMarker | null>(null);
   const [markers, setMarkers] = useState<AccessibilityMarker[]>([]);
   
@@ -31,7 +31,7 @@ const AccessibilityMap: React.FC<AccessibilityMapProps> = ({
   }, []);
 
   const { isLoaded, loadError } = useLoadScript({
-    googleMapsApiKey: "YOUR_API_KEY",
+    googleMapsApiKey: import.meta.env.VITE_GOOGLE_MAPS_API_KEY || "",
     libraries: ['places']
   });
 
@@ -45,17 +45,13 @@ const AccessibilityMap: React.FC<AccessibilityMapProps> = ({
     if (navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(
         (position) => {
-          const userLocation = {
-            lat: position.coords.latitude,
-            lng: position.coords.longitude
-          };
-          setCurrentLocation(userLocation);
-          successFeedback();
+          const { latitude, longitude } = position.coords;
+          setCurrentLocation({ lat: latitude, lng: longitude });
         },
         (error) => {
-          console.error('Error getting location:', error);
-        },
-        { timeout: 10000 }
+          console.error('Error getting user location:', error);
+          // Optionally set a default location or notify the user
+        }
       );
     }
   }, []);
@@ -73,21 +69,11 @@ const AccessibilityMap: React.FC<AccessibilityMapProps> = ({
 
   // Center on user location
   const handleCenterOnUser = useCallback(() => {
-    if (navigator.geolocation) {
-      navigator.geolocation.getCurrentPosition(
-        (position) => {
-          setCurrentLocation({
-            lat: position.coords.latitude,
-            lng: position.coords.longitude
-          });
-          successFeedback();
-        },
-        (error) => {
-          console.error('Error getting location:', error);
-        }
-      );
+    if (currentLocation) {
+      setCurrentLocation(currentLocation);
+      successFeedback();
     }
-  }, []);
+  }, [currentLocation]);
 
   if (loadError) {
     return (
@@ -100,10 +86,8 @@ const AccessibilityMap: React.FC<AccessibilityMapProps> = ({
   if (!isLoaded) {
     return (
       <div className="absolute inset-0 flex items-center justify-center bg-muted">
-        <div className="flex flex-col items-center">
-          <Loader className="animate-spin text-accessibility-blue mb-3" size={32} />
-          <p className="text-muted-foreground">Loading map...</p>
-        </div>
+        <Loader className="animate-spin text-accessibility-blue mb-3" size={32} />
+        <p className="text-muted-foreground">Loading map...</p>
       </div>
     );
   }
@@ -112,24 +96,26 @@ const AccessibilityMap: React.FC<AccessibilityMapProps> = ({
     <div className={cn('map-container relative h-full w-full', className)}>
       <GoogleMap
         mapContainerClassName="w-full h-full"
-        center={currentLocation}
-        zoom={GOOGLE_MAPS_CONFIG.defaultZoom}
+        center={currentLocation || { lat: 37.7749, lng: -122.4194 }} // Default to San Francisco if no location
+        zoom={12}
         onClick={handleMapClick}
         options={{
-          zoomControl: false,
+          zoomControl: true,
           streetViewControl: false,
           mapTypeControl: false,
           fullscreenControl: false,
         }}
       >
         {/* Current location marker */}
-        <Marker
-          position={currentLocation}
-          icon={{
-            url: '/current-location.svg', // Create this icon
-            scaledSize: new google.maps.Size(30, 30)
-          }}
-        />
+        {currentLocation && (
+          <Marker
+            position={currentLocation}
+            icon={{
+              url: '/current-location.svg', // Ensure this icon exists
+              scaledSize: new google.maps.Size(30, 30)
+            }}
+          />
+        )}
 
         {/* Accessibility markers */}
         {markers.map((marker) => (
@@ -160,40 +146,12 @@ const AccessibilityMap: React.FC<AccessibilityMapProps> = ({
       <div className="absolute bottom-28 left-4 flex flex-col gap-2">
         <button 
           className="fab bg-white text-foreground p-2 rounded-full shadow-medium"
-          onClick={() => {
-            const map = document.querySelector('div[aria-label="Map"]');
-            if (map) {
-              const zoom = (map as any).__gm?.getZoom() || GOOGLE_MAPS_CONFIG.defaultZoom;
-              (map as any).__gm?.setZoom(zoom + 1);
-            }
-          }}
-          aria-label="Zoom in"
+          onClick={handleCenterOnUser}
+          aria-label="Center on current location"
         >
-          <span className="text-xl font-bold">+</span>
-        </button>
-        
-        <button 
-          className="fab bg-white text-foreground p-2 rounded-full shadow-medium"
-          onClick={() => {
-            const map = document.querySelector('div[aria-label="Map"]');
-            if (map) {
-              const zoom = (map as any).__gm?.getZoom() || GOOGLE_MAPS_CONFIG.defaultZoom;
-              (map as any).__gm?.setZoom(zoom - 1);
-            }
-          }}
-          aria-label="Zoom out"
-        >
-          <span className="text-xl font-bold">−</span>
+          <Navigation size={20} className="text-accessibility-blue" />
         </button>
       </div>
-      
-      <button 
-        className="fab bottom-28 left-1/2 transform -translate-x-1/2 bg-white text-foreground p-3 rounded-full shadow-medium"
-        onClick={handleCenterOnUser}
-        aria-label="Center on current location"
-      >
-        <Navigation size={20} className="text-accessibility-blue" />
-      </button>
     </div>
   );
 };
