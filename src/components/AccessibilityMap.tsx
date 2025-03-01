@@ -1,5 +1,5 @@
+
 import React, { useState, useCallback, useEffect } from 'react';
-import { GoogleMap, useLoadScript, Marker, InfoWindow } from '@react-google-maps/api';
 import { MapPin, Navigation, Loader } from 'lucide-react';
 import { successFeedback } from '@/utils/hapticFeedback';
 import { cn } from '@/lib/utils';
@@ -24,29 +24,81 @@ const AccessibilityMap: React.FC<AccessibilityMapProps> = ({
   const [currentLocation, setCurrentLocation] = useState<google.maps.LatLngLiteral | null>(null);
   const [selectedMarker, setSelectedMarker] = useState<AccessibilityMarker | null>(null);
   const [markers, setMarkers] = useState<AccessibilityMarker[]>([]);
+  const [mapLoaded, setMapLoaded] = useState(false);
+  const [mapLoadError, setMapLoadError] = useState<string | null>(null);
+  const [map, setMap] = useState<google.maps.Map | null>(null);
+  const mapRef = React.useRef<HTMLDivElement>(null);
   
   // Add debug logs
   useEffect(() => {
     console.log('Checking Google Maps availability:', window.google?.maps);
   }, []);
 
-  const { isLoaded, loadError } = useLoadScript({
-    googleMapsApiKey: import.meta.env.VITE_GOOGLE_MAPS_API_KEY || "",
-    libraries: ['places']
-  });
-
-  // Add debug logs
+  // Initialize the map
   useEffect(() => {
-    console.log('Map load status:', { isLoaded, loadError });
-  }, [isLoaded, loadError]);
+    if (!mapRef.current || !window.google?.maps) {
+      console.log('Map or Google Maps API not available yet');
+      return;
+    }
+
+    try {
+      console.log('Initializing Google Map');
+      const newMap = new google.maps.Map(mapRef.current, {
+        center: currentLocation,
+        zoom: GOOGLE_MAPS_CONFIG.defaultZoom,
+        zoomControl: false,
+        streetViewControl: false,
+        mapTypeControl: false,
+        fullscreenControl: false,
+      });
+      
+      setMap(newMap);
+      setMapLoaded(true);
+      
+      // Add current location marker
+      new google.maps.Marker({
+        position: currentLocation,
+        map: newMap,
+        icon: {
+          url: 'https://maps.google.com/mapfiles/ms/icons/blue-dot.png',
+          scaledSize: new google.maps.Size(30, 30)
+        }
+      });
+      
+      // Add map click listener
+      newMap.addListener('click', (event: google.maps.MapMouseEvent) => {
+        if (event.latLng && onLocationSelect) {
+          const clickedLocation = {
+            lat: event.latLng.lat(),
+            lng: event.latLng.lng()
+          };
+          onLocationSelect(clickedLocation);
+        }
+      });
+      
+    } catch (error) {
+      console.error('Error initializing map:', error);
+      setMapLoadError(error instanceof Error ? error.message : 'Failed to load map');
+    }
+  }, [currentLocation, onLocationSelect]);
 
   // Get user's location
   useEffect(() => {
     if (navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(
         (position) => {
-          const { latitude, longitude } = position.coords;
-          setCurrentLocation({ lat: latitude, lng: longitude });
+          const userLocation = {
+            lat: position.coords.latitude,
+            lng: position.coords.longitude
+          };
+          setCurrentLocation(userLocation);
+          
+          // Center map on user location if map exists
+          if (map) {
+            map.setCenter(userLocation);
+          }
+          
+          successFeedback();
         },
         (error) => {
           console.error('Error getting user location:', error);
@@ -54,36 +106,94 @@ const AccessibilityMap: React.FC<AccessibilityMapProps> = ({
         }
       );
     }
-  }, []);
+  }, [map]);
 
-  // Map click handler
-  const handleMapClick = useCallback((event: google.maps.MapMouseEvent) => {
-    if (event.latLng && onLocationSelect) {
-      const clickedLocation = {
-        lat: event.latLng.lat(),
-        lng: event.latLng.lng()
-      };
-      onLocationSelect(clickedLocation);
-    }
-  }, [onLocationSelect]);
+  // Update markers on the map when markers state changes
+  useEffect(() => {
+    if (!map) return;
+    
+    // Clear existing markers (if any implementation needed)
+    
+    // Add new markers
+    markers.forEach(marker => {
+      const mapMarker = new google.maps.Marker({
+        position: marker.position,
+        map: map,
+        title: marker.title,
+        icon: {
+          url: `https://maps.google.com/mapfiles/ms/icons/${getMarkerColor(marker.type)}-dot.png`,
+          scaledSize: new google.maps.Size(25, 25)
+        }
+      });
+      
+      // Add click listener for marker
+      mapMarker.addListener('click', () => {
+        setSelectedMarker(marker);
+        
+        // Create info window
+        const infoWindow = new google.maps.InfoWindow({
+          content: `
+            <div>
+              <h3 style="font-weight: 500;">${marker.title}</h3>
+              <p style="color: #666;">${marker.type}</p>
+            </div>
+          `
+        });
+        
+        infoWindow.open(map, mapMarker);
+      });
+    });
+  }, [markers, map]);
 
   // Center on user location
   const handleCenterOnUser = useCallback(() => {
-    if (currentLocation) {
-      setCurrentLocation(currentLocation);
-      successFeedback();
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          const newLocation = {
+            lat: position.coords.latitude,
+            lng: position.coords.longitude
+          };
+          setCurrentLocation(newLocation);
+          
+          if (map) {
+            map.setCenter(newLocation);
+          }
+          
+          successFeedback();
+        },
+        (error) => {
+          console.error('Error getting location:', error);
+        }
+      );
     }
-  }, [currentLocation]);
+  }, [map]);
 
-  if (loadError) {
+  // Handle zoom in
+  const handleZoomIn = useCallback(() => {
+    if (map) {
+      const currentZoom = map.getZoom() || GOOGLE_MAPS_CONFIG.defaultZoom;
+      map.setZoom(currentZoom + 1);
+    }
+  }, [map]);
+
+  // Handle zoom out
+  const handleZoomOut = useCallback(() => {
+    if (map) {
+      const currentZoom = map.getZoom() || GOOGLE_MAPS_CONFIG.defaultZoom;
+      map.setZoom(currentZoom - 1);
+    }
+  }, [map]);
+
+  if (mapLoadError) {
     return (
       <div className="flex items-center justify-center p-4 text-red-500">
-        Error loading maps
+        Error loading maps: {mapLoadError}
       </div>
     );
   }
 
-  if (!isLoaded) {
+  if (!mapLoaded) {
     return (
       <div className="absolute inset-0 flex items-center justify-center bg-muted">
         <Loader className="animate-spin text-accessibility-blue mb-3" size={32} />
@@ -94,66 +204,50 @@ const AccessibilityMap: React.FC<AccessibilityMapProps> = ({
 
   return (
     <div className={cn('map-container relative h-full w-full', className)}>
-      <GoogleMap
-        mapContainerClassName="w-full h-full"
-        center={currentLocation || { lat: 37.7749, lng: -122.4194 }} // Default to San Francisco if no location
-        zoom={12}
-        onClick={handleMapClick}
-        options={{
-          zoomControl: true,
-          streetViewControl: false,
-          mapTypeControl: false,
-          fullscreenControl: false,
-        }}
-      >
-        {/* Current location marker */}
-        {currentLocation && (
-          <Marker
-            position={currentLocation}
-            icon={{
-              url: '/current-location.svg', // Ensure this icon exists
-              scaledSize: new google.maps.Size(30, 30)
-            }}
-          />
-        )}
-
-        {/* Accessibility markers */}
-        {markers.map((marker) => (
-          <Marker
-            key={marker.id}
-            position={marker.position}
-            onClick={() => setSelectedMarker(marker)}
-          />
-        ))}
-
-        {/* Info window for selected marker */}
-        {selectedMarker && (
-          <InfoWindow
-            position={selectedMarker.position}
-            onCloseClick={() => setSelectedMarker(null)}
-          >
-            <div>
-              <h3 className="font-medium">{selectedMarker.title}</h3>
-              <p className="text-sm text-muted-foreground">
-                {selectedMarker.type}
-              </p>
-            </div>
-          </InfoWindow>
-        )}
-      </GoogleMap>
+      <div ref={mapRef} className="w-full h-full"></div>
 
       {/* Map controls */}
       <div className="absolute bottom-28 left-4 flex flex-col gap-2">
         <button 
           className="fab bg-white text-foreground p-2 rounded-full shadow-medium"
-          onClick={handleCenterOnUser}
-          aria-label="Center on current location"
+          onClick={handleZoomIn}
+          aria-label="Zoom in"
         >
-          <Navigation size={20} className="text-accessibility-blue" />
+          <span className="text-xl font-bold">+</span>
+        </button>
+        
+        <button 
+          className="fab bg-white text-foreground p-2 rounded-full shadow-medium"
+          onClick={handleZoomOut}
+          aria-label="Zoom out"
+        >
+          <span className="text-xl font-bold">−</span>
         </button>
       </div>
+      
+      <button 
+        className="fab absolute bottom-28 left-1/2 transform -translate-x-1/2 bg-white text-foreground p-3 rounded-full shadow-medium"
+        onClick={handleCenterOnUser}
+        aria-label="Center on current location"
+      >
+        <Navigation size={20} className="text-accessibility-blue" />
+      </button>
     </div>
   );
+};
+
+// Helper function to get marker color based on type
+const getMarkerColor = (type: string): string => {
+  switch (type) {
+    case 'wheelchair':
+      return 'green';
+    case 'elevator':
+      return 'yellow';
+    case 'ramp':
+      return 'blue';
+    default:
+      return 'red';
+  }
 };
 
 export default AccessibilityMap;
