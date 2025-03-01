@@ -1,3 +1,4 @@
+
 import React, { useState, useCallback, useEffect } from 'react';
 import { GoogleMap, useLoadScript, Marker, InfoWindow } from '@react-google-maps/api';
 import { MapPin, Navigation, Loader } from 'lucide-react';
@@ -31,7 +32,7 @@ const AccessibilityMap: React.FC<AccessibilityMapProps> = ({
   }, []);
 
   const { isLoaded, loadError } = useLoadScript({
-    googleMapsApiKey: "YOUR_API_KEY",
+    googleMapsApiKey: "AIzaSyDZ8-so9gnftq2th1Z5OFzUPFAg-Z-9uN4",
     libraries: ['places']
   });
 
@@ -92,7 +93,7 @@ const AccessibilityMap: React.FC<AccessibilityMapProps> = ({
   if (loadError) {
     return (
       <div className="flex items-center justify-center p-4 text-red-500">
-        Error loading maps
+        Error loading maps: {loadError.message}
       </div>
     );
   }
@@ -126,7 +127,7 @@ const AccessibilityMap: React.FC<AccessibilityMapProps> = ({
         <Marker
           position={currentLocation}
           icon={{
-            url: '/current-location.svg', // Create this icon
+            url: 'https://maps.google.com/mapfiles/ms/icons/blue-dot.png',
             scaledSize: new google.maps.Size(30, 30)
           }}
         />
@@ -137,6 +138,10 @@ const AccessibilityMap: React.FC<AccessibilityMapProps> = ({
             key={marker.id}
             position={marker.position}
             onClick={() => setSelectedMarker(marker)}
+            icon={{
+              url: `https://maps.google.com/mapfiles/ms/icons/${getMarkerColor(marker.type)}-dot.png`,
+              scaledSize: new google.maps.Size(25, 25)
+            }}
           />
         ))}
 
@@ -188,7 +193,7 @@ const AccessibilityMap: React.FC<AccessibilityMapProps> = ({
       </div>
       
       <button 
-        className="fab bottom-28 left-1/2 transform -translate-x-1/2 bg-white text-foreground p-3 rounded-full shadow-medium"
+        className="fab absolute bottom-28 left-1/2 transform -translate-x-1/2 bg-white text-foreground p-3 rounded-full shadow-medium"
         onClick={handleCenterOnUser}
         aria-label="Center on current location"
       >
@@ -196,6 +201,20 @@ const AccessibilityMap: React.FC<AccessibilityMapProps> = ({
       </button>
     </div>
   );
+};
+
+// Helper function to get marker color based on type
+const getMarkerColor = (type: string): string => {
+  switch (type) {
+    case 'wheelchair':
+      return 'green';
+    case 'elevator':
+      return 'yellow';
+    case 'ramp':
+      return 'blue';
+    default:
+      return 'red';
+  }
 };
 
 export default AccessibilityMap;

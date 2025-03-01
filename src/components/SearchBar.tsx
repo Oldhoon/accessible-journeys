@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Search, X, Mic } from 'lucide-react';
 import { buttonFeedback } from '@/utils/hapticFeedback';
 import { cn } from '@/lib/utils';
@@ -17,6 +17,35 @@ const SearchBar: React.FC<SearchBarProps> = ({
 }) => {
   const [query, setQuery] = useState('');
   const [isFocused, setIsFocused] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const autocompleteRef = useRef<google.maps.places.Autocomplete | null>(null);
+
+  useEffect(() => {
+    if (window.google && window.google.maps && inputRef.current) {
+      console.log('Initializing Places Autocomplete');
+      autocompleteRef.current = new google.maps.places.Autocomplete(inputRef.current, {
+        types: ['establishment', 'geocode'],
+        fields: ['formatted_address', 'geometry', 'name']
+      });
+
+      autocompleteRef.current.addListener('place_changed', () => {
+        const place = autocompleteRef.current?.getPlace();
+        if (place?.name) {
+          setQuery(place.name);
+          onSearch(place.name);
+          buttonFeedback();
+        }
+      });
+    } else {
+      console.log('Google Maps API not loaded yet');
+    }
+    
+    return () => {
+      if (autocompleteRef.current) {
+        google.maps.event.clearInstanceListeners(autocompleteRef.current);
+      }
+    };
+  }, [onSearch]);
 
   const handleSearch = () => {
     if (query.trim()) {
@@ -28,6 +57,9 @@ const SearchBar: React.FC<SearchBarProps> = ({
   const handleClear = () => {
     buttonFeedback();
     setQuery('');
+    if (inputRef.current) {
+      inputRef.current.focus();
+    }
   };
 
   const handleVoiceSearch = () => {
@@ -38,8 +70,8 @@ const SearchBar: React.FC<SearchBarProps> = ({
 
   return (
     <div className={cn(
-      'search-bar flex items-center p-2 transition-all duration-300 ease-in-out',
-      isFocused ? 'shadow-medium' : '',
+      'search-bar flex items-center p-2 bg-white rounded-full shadow-md transition-all duration-300 ease-in-out max-w-md w-full',
+      isFocused ? 'shadow-lg' : '',
       className
     )}>
       <button 
@@ -51,6 +83,7 @@ const SearchBar: React.FC<SearchBarProps> = ({
       </button>
       
       <input
+        ref={inputRef}
         type="text"
         value={query}
         onChange={(e) => setQuery(e.target.value)}
