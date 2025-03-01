@@ -1,119 +1,190 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
+import { GoogleMap, useLoadScript, Marker, InfoWindow } from '@react-google-maps/api';
 import { MapPin, Navigation, Loader } from 'lucide-react';
 import { successFeedback } from '@/utils/hapticFeedback';
 import { cn } from '@/lib/utils';
+import { GOOGLE_MAPS_CONFIG } from '@/config/maps';
 
 interface AccessibilityMapProps {
   className?: string;
-  onLocationSelect?: (location: any) => void;
+  onLocationSelect?: (location: google.maps.LatLngLiteral) => void;
+}
+
+interface AccessibilityMarker {
+  id: string;
+  position: google.maps.LatLngLiteral;
+  title: string;
+  type: 'wheelchair' | 'elevator' | 'ramp' | 'other';
 }
 
 const AccessibilityMap: React.FC<AccessibilityMapProps> = ({ 
   className,
   onLocationSelect
 }) => {
-  const [isLoading, setIsLoading] = useState(true);
-  const [currentLocation, setCurrentLocation] = useState<{lat: number, lng: number} | null>(null);
+  const [currentLocation, setCurrentLocation] = useState<google.maps.LatLngLiteral>(GOOGLE_MAPS_CONFIG.defaultCenter);
+  const [selectedMarker, setSelectedMarker] = useState<AccessibilityMarker | null>(null);
+  const [markers, setMarkers] = useState<AccessibilityMarker[]>([]);
   
-  // Simulated map loading
+  // Load the Google Maps script
+  const { isLoaded, loadError } = useLoadScript({
+    googleMapsApiKey: GOOGLE_MAPS_CONFIG.apiKey,
+    libraries: ['places']
+  });
+
+  // Get user's location
   useEffect(() => {
-    const timer = setTimeout(() => {
-      setIsLoading(false);
-      
-      // Add error handling for geolocation permission denial
-      if (navigator.geolocation) {
-        navigator.geolocation.getCurrentPosition(
-          (position) => {
-            setCurrentLocation({
-              lat: position.coords.latitude,
-              lng: position.coords.longitude
-            });
-            successFeedback();
-          },
-          (error) => {
-            console.error('Error getting location:', error);
-            // Add user notification for location error
-            setCurrentLocation({ lat: 37.7749, lng: -122.4194 });
-          },
-          { timeout: 10000 } // Add timeout option
-        );
-      } else {
-        // Set default location if geolocation not available
-        setCurrentLocation({ lat: 37.7749, lng: -122.4194 });
-      }
-    }, 1500);
-    
-    return () => clearTimeout(timer);
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          const userLocation = {
+            lat: position.coords.latitude,
+            lng: position.coords.longitude
+          };
+          setCurrentLocation(userLocation);
+          successFeedback();
+        },
+        (error) => {
+          console.error('Error getting location:', error);
+        },
+        { timeout: 10000 }
+      );
+    }
   }, []);
-  
-  // This is a placeholder for the actual map implementation
-  // In a real app, this would use the Google Maps API or another mapping library
-  
-  return (
-    <div className={cn('map-container relative', className)}>
-      {isLoading ? (
-        <div className="absolute inset-0 flex items-center justify-center bg-muted">
-          <div className="flex flex-col items-center">
-            <Loader className="animate-spin text-accessibility-blue mb-3" size={32} />
-            <p className="text-muted-foreground">Loading map...</p>
-          </div>
+
+  // Map click handler
+  const handleMapClick = useCallback((event: google.maps.MapMouseEvent) => {
+    if (event.latLng && onLocationSelect) {
+      const clickedLocation = {
+        lat: event.latLng.lat(),
+        lng: event.latLng.lng()
+      };
+      onLocationSelect(clickedLocation);
+    }
+  }, [onLocationSelect]);
+
+  // Center on user location
+  const handleCenterOnUser = useCallback(() => {
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          setCurrentLocation({
+            lat: position.coords.latitude,
+            lng: position.coords.longitude
+          });
+          successFeedback();
+        },
+        (error) => {
+          console.error('Error getting location:', error);
+        }
+      );
+    }
+  }, []);
+
+  if (loadError) {
+    return (
+      <div className="flex items-center justify-center p-4 text-red-500">
+        Error loading maps
+      </div>
+    );
+  }
+
+  if (!isLoaded) {
+    return (
+      <div className="absolute inset-0 flex items-center justify-center bg-muted">
+        <div className="flex flex-col items-center">
+          <Loader className="animate-spin text-accessibility-blue mb-3" size={32} />
+          <p className="text-muted-foreground">Loading map...</p>
         </div>
-      ) : (
-        <>
-          {/* This would be replaced with an actual map implementation */}
-          <div className="absolute inset-0 bg-slate-200">
-            {/* Map placeholder with grid lines to simulate a map */}
-            <div className="w-full h-full grid grid-cols-8 grid-rows-8">
-              {Array.from({ length: 64 }).map((_, i) => (
-                <div key={i} className="border border-slate-300" />
-              ))}
-            </div>
-            
-            {/* Simulated map markers */}
-            <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2">
-              <div className="accessibility-marker bg-accessibility-blue animate-pulse-subtle">
-                <MapPin className="text-white" size={20} />
-              </div>
-            </div>
-            
-            <div className="absolute top-1/4 left-2/3 transform -translate-x-1/2 -translate-y-1/2">
-              <div className="accessibility-marker bg-accessibility-green">
-                <MapPin className="text-white" size={20} />
-              </div>
-            </div>
-            
-            <div className="absolute top-3/4 left-1/3 transform -translate-x-1/2 -translate-y-1/2">
-              <div className="accessibility-marker bg-accessibility-yellow">
-                <MapPin className="text-white" size={20} />
-              </div>
-            </div>
-          </div>
-          
-          {/* Map controls */}
-          <div className="absolute bottom-28 left-4 flex flex-col gap-2">
-            <button 
-              className="fab bg-white text-foreground p-2 rounded-full shadow-medium"
-              aria-label="Zoom in"
-            >
-              <span className="text-xl font-bold">+</span>
-            </button>
-            
-            <button 
-              className="fab bg-white text-foreground p-2 rounded-full shadow-medium"
-              aria-label="Zoom out"
-            >
-              <span className="text-xl font-bold">−</span>
-            </button>
-          </div>
-          
-          <button 
-            className="fab bottom-28 left-1/2 transform -translate-x-1/2 bg-white text-foreground p-3 rounded-full shadow-medium"
-            aria-label="Center on current location"
+      </div>
+    );
+  }
+
+  return (
+    <div className={cn('map-container relative h-full w-full', className)}>
+      <GoogleMap
+        mapContainerClassName="w-full h-full"
+        center={currentLocation}
+        zoom={GOOGLE_MAPS_CONFIG.defaultZoom}
+        onClick={handleMapClick}
+        options={{
+          zoomControl: false,
+          streetViewControl: false,
+          mapTypeControl: false,
+          fullscreenControl: false,
+        }}
+      >
+        {/* Current location marker */}
+        <Marker
+          position={currentLocation}
+          icon={{
+            url: '/current-location.svg', // Create this icon
+            scaledSize: new google.maps.Size(30, 30)
+          }}
+        />
+
+        {/* Accessibility markers */}
+        {markers.map((marker) => (
+          <Marker
+            key={marker.id}
+            position={marker.position}
+            onClick={() => setSelectedMarker(marker)}
+          />
+        ))}
+
+        {/* Info window for selected marker */}
+        {selectedMarker && (
+          <InfoWindow
+            position={selectedMarker.position}
+            onCloseClick={() => setSelectedMarker(null)}
           >
-            <Navigation size={20} className="text-accessibility-blue" />
-          </button>
-        </>
-      )}
+            <div>
+              <h3 className="font-medium">{selectedMarker.title}</h3>
+              <p className="text-sm text-muted-foreground">
+                {selectedMarker.type}
+              </p>
+            </div>
+          </InfoWindow>
+        )}
+      </GoogleMap>
+
+      {/* Map controls */}
+      <div className="absolute bottom-28 left-4 flex flex-col gap-2">
+        <button 
+          className="fab bg-white text-foreground p-2 rounded-full shadow-medium"
+          onClick={() => {
+            const map = document.querySelector('div[aria-label="Map"]');
+            if (map) {
+              const zoom = (map as any).__gm?.getZoom() || GOOGLE_MAPS_CONFIG.defaultZoom;
+              (map as any).__gm?.setZoom(zoom + 1);
+            }
+          }}
+          aria-label="Zoom in"
+        >
+          <span className="text-xl font-bold">+</span>
+        </button>
+        
+        <button 
+          className="fab bg-white text-foreground p-2 rounded-full shadow-medium"
+          onClick={() => {
+            const map = document.querySelector('div[aria-label="Map"]');
+            if (map) {
+              const zoom = (map as any).__gm?.getZoom() || GOOGLE_MAPS_CONFIG.defaultZoom;
+              (map as any).__gm?.setZoom(zoom - 1);
+            }
+          }}
+          aria-label="Zoom out"
+        >
+          <span className="text-xl font-bold">−</span>
+        </button>
+      </div>
+      
+      <button 
+        className="fab bottom-28 left-1/2 transform -translate-x-1/2 bg-white text-foreground p-3 rounded-full shadow-medium"
+        onClick={handleCenterOnUser}
+        aria-label="Center on current location"
+      >
+        <Navigation size={20} className="text-accessibility-blue" />
+      </button>
     </div>
   );
 };
