@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { Home, Search, Plus, User, Settings } from 'lucide-react';
@@ -65,7 +66,7 @@ const AppNavigation: React.FC = () => {
 };
 
 // Create a new ErrorBoundary component
-class ErrorBoundary extends React.Component {
+class ErrorBoundary extends React.Component<{children: React.ReactNode}> {
   state = { hasError: false };
 
   static getDerivedStateFromError() {

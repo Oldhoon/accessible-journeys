@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { ChevronLeft, MapPin, Clock, Star } from 'lucide-react';
@@ -5,7 +6,6 @@ import SearchBar from '@/components/SearchBar';
 import AppNavigation from '@/components/navigation/AppNavigation';
 import { buttonFeedback } from '@/utils/hapticFeedback';
 import { cn } from '@/lib/utils';
-
 
 // Define a type for the place results
 interface PlaceResult {
@@ -16,6 +16,15 @@ interface PlaceResult {
   distance: string; // Placeholder for distance
   features: string[];
   type: string;
+}
+
+// Define interface for Google Places API response
+interface GooglePlaceResult {
+  place_id: string;
+  name: string;
+  formatted_address: string;
+  rating?: number;
+  types: string[];
 }
 
 const SearchPage = () => {
@@ -34,32 +43,37 @@ const SearchPage = () => {
       setLoading(true);
       setError(null); // Reset error state
       try {
-        const response: AxiosResponse = await axios.get(`https://maps.googleapis.com/maps/api/place/textsearch/json`, {
-          params: {
-            query: query,
-            key: import.meta.env.VITE_GOOGLE_MAPS_API_KEY, // Use environment variable
-          }
-        });
-
-        // Check if results are available
-        if (response.data.results) {
-          const formattedResults = response.data.results.map((place: any) => ({
-            id: place.place_id,
-            name: place.name,
-            address: place.formatted_address,
-            rating: place.rating || 'N/A',
-            distance: 'Unknown', // Placeholder for distance
-            features: place.types, // You can map types to your features
-            type: place.types[0] // Get the primary type
-          }));
-          setResults(formattedResults);
+        // Use the global google object for places search instead of axios
+        if (window.google && window.google.maps && window.google.maps.places) {
+          const service = new google.maps.places.PlacesService(document.createElement('div'));
+          
+          service.textSearch(
+            { query: query },
+            (results, status) => {
+              if (status === google.maps.places.PlacesServiceStatus.OK && results) {
+                const formattedResults = results.map((place: GooglePlaceResult) => ({
+                  id: place.place_id,
+                  name: place.name,
+                  address: place.formatted_address,
+                  rating: place.rating || 'N/A',
+                  distance: 'Unknown', // Placeholder for distance
+                  features: place.types, // You can map types to your features
+                  type: place.types[0] // Get the primary type
+                }));
+                setResults(formattedResults);
+              } else {
+                setResults([]);
+                setError(`No results found (Status: ${status})`);
+              }
+              setLoading(false);
+            }
+          );
         } else {
-          setResults([]);
+          throw new Error('Google Maps Places API not available');
         }
       } catch (error) {
         console.error('Error fetching results:', error);
         setError('Failed to fetch results. Please try again later.');
-      } finally {
         setLoading(false);
       }
     };
@@ -155,12 +169,12 @@ const SearchPage = () => {
                   </div>
                   
                   <div className="flex flex-wrap gap-2">
-                    {result.features.map((feature: string) => (
+                    {result.features.map((feature: string, index: number) => (
                       <span 
-                        key={feature}
+                        key={`${result.id}-feature-${index}`}
                         className="px-2 py-1 bg-secondary text-xs rounded-full"
                       >
-                        {feature.charAt(0).toUpperCase() + feature.slice(1)}
+                        {feature.replace(/_/g, ' ').charAt(0).toUpperCase() + feature.replace(/_/g, ' ').slice(1)}
                       </span>
                     ))}
                   </div>
